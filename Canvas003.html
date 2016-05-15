@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset=utf-8>
+		<title>Canvas003 Langton's Ant</title>
+        <style type="text/css">
+            body { margin: 0; }
+            #canvasMain {
+                image-rendering: pixelated;
+                border-style: solid;
+                border-width: 0.2px;
+                border-color: #000000;
+            }
+        </style>
+	</head>
+	<body>
+        <canvas id="canvasMain" width="512" height="512"></canvas>
+        
+        <p>
+            Step: <span id="spanStep"></span>
+        </p>
+        
+        <p>
+            Speed: <input id="numberSpeed" type="number" value="1" min="1" step="100" oninput="onInputNumberSpeed(this.value)">
+        </p>
+        
+        <p>
+            Rule: <input id="textRule" type="text" value="LR" onchange="onChangeTextRule(this.value)">
+            L (90° left), R (90° right), N (no turn) and U (180° U-turn).
+        </p>
+        
+        <p>
+			<input id="buttonStep" type="button" value="Step" onclick="onButtonStepClick()">
+            <input id="buttonPause" type="button" value="Pause" onclick="onButtonPauseClick()">
+            <input id="buttonReset" type="button" value="Reset" onclick="onButtonResetClick()">
+            /
+            <input id="buttonRandom" type="button" value="Random" onclick="onButtonRandomClick()">
+            Symmetry <input id="checkboxSymmetry" type="checkbox">
+        </p>
+        
+        <p>
+        描画が重くなってきた場合は、一度Pauseしてみてください。
+        </p>
+        
+        <script>
+            const N = 0; // North
+            const E = 1; // East
+            const S = 2; // South
+            const W = 3; // West
+            
+            class Ant
+            {
+                constructor(width, height)
+                {
+                    this.width  = width;
+                    this.height = height;
+                    
+                    this.rule = "LR";
+                    
+                    this.ant = [];
+                    
+                    this.field = [];
+                    for (var i = 0; i < width; ++i)
+                        this.field[i] = new Array(height);
+                        
+                    this.reset();
+                }
+                
+                set Rule(rule)
+                {
+                    this.rule = rule;
+                }
+                
+                get Ant()
+                {
+                    return this.ant;
+                }
+                
+                reset()
+                {
+                    this.ant.length = 0;
+                    this.addAnt(width / 2, height / 2, N);
+                    
+                    for (var i = 0; i < width; ++i)
+                        this.field[i].fill(0);
+                }
+                
+                addAnt(x, y, direction)
+                {
+                    this.ant.push({
+                        x: x,
+                        y: y,
+                        direction: direction
+                    });
+                }
+                
+                at(x, y)
+                {
+                    return this.field[x][y] / (this.rule.length - 1);
+                }
+                
+                next()
+                {
+                    for (var i = 0; i < this.ant.length; ++i)
+                    {
+                        // 現在地点のセルを更新
+                        this.field[this.ant[i].x][this.ant[i].y] = (this.field[this.ant[i].x][this.ant[i].y] + 1) % this.rule.length;
+                        
+                        // 一歩進む
+                        switch(this.ant[i].direction)
+                        {
+                            case N:
+                                this.ant[i].y = this.mod(this.ant[i].y + 1, this.height);
+                                break;
+                            case E:
+                                this.ant[i].x = this.mod(this.ant[i].x + 1, this.width);
+                                break;
+                            case S:
+                                this.ant[i].y = this.mod(this.ant[i].y - 1, this.height);
+                                break;
+                            case W:
+                                this.ant[i].x = this.mod(this.ant[i].x - 1, this.width);
+                                break;
+                            default:
+                                console.log("Invalid direction");
+                        }
+                        
+                        // 次に進む方向を決定
+                        switch(this.rule.charAt(this.field[this.ant[i].x][this.ant[i].y]))
+                        {
+                            case "L":
+                                this.ant[i].direction = this.mod(this.ant[i].direction + 1, 4);
+                                break;
+                            case "R":
+                                this.ant[i].direction = this.mod(this.ant[i].direction - 1, 4);
+                                break;
+                            case "N":
+                                break;
+                            case "U":
+                                this.ant[i].direction = this.mod(this.ant[i].direction + 2, 4);
+                                break;
+                            default:
+                                console.log("Invalid Rule");
+                        }
+                    }
+                }
+                
+                mod(a, b)
+                {
+                    if (b < 0)
+                        return null;
+                    else if (a < 0)
+                        return b + a;
+                    else
+                        return a % b;
+                }
+            }
+            
+            // canvas設定 //
+            var canvasMain = document.getElementById("canvasMain");
+            var width  = canvasMain.width;
+            var height = canvasMain.height;
+            var context = canvasMain.getContext('2d');
+            var imageData = context.getImageData(0, 0, width, height);
+            var pixels = imageData.data;
+            
+            canvasMain.addEventListener("click", onCanvasMainClick, false);
+            
+            context.imageSmoothingEnabled = false;
+            
+            var ant = new Ant(canvasMain.width, canvasMain.height);
+            onChangeTextRule("LRRLLLLU");
+            
+            // animation 設定 //
+            var pause = false;
+            
+            // --- //
+            animate();
+            
+            function animate()
+            {
+                if(!pause)
+                {
+                    requestAnimationFrame( animate );
+                }
+                
+                updateCanvas();
+            }
+            
+            var speed = parseInt(document.getElementById("numberSpeed").value);
+            var step = 0;
+            spanStep = document.getElementById("spanStep");
+            function updateCanvas()
+            {
+                for (var y = 0; y < height; ++y) {
+                    for (var x = 0; x < width; ++x) {
+                        var state = ant.at(x, y);
+                        
+                        var index = (y * width + x) * 4;
+                        var a = Math.floor(255 * state);
+                        pixels[index + 0] = 255 - (6039 * a) % 256;//a; // R
+                        pixels[index + 1] = 255 - (11241 * a) % 256;//128 + 127 * state; // G
+                        pixels[index + 2] = 255 - a;//a; // B
+                        pixels[index + 3] = 255; // A
+                    }
+                }
+
+                context.putImageData(imageData, 0, 0);
+                
+                // ステップを進める
+                if (!pause)
+                    stepForward();
+                
+                spanStep.textContent = step;
+                
+                // antの位置を表示
+                for (var i = 0; i < ant.Ant.length; ++i)
+                {
+                    var x = ant.Ant[i].x;
+                    var y = ant.Ant[i].y;
+                    var d = ant.Ant[i].direction;
+                    
+                    context.strokeStyle = "#333333";
+                    context.lineWidth = 0.3;
+                    
+                    // 縦軸
+                    context.beginPath();
+                    context.moveTo(0, y);
+                    context.lineTo(width, y);
+                    context.stroke();
+                    
+                    // 横軸
+                    context.beginPath();
+                    context.moveTo(x, 0);
+                    context.lineTo(x, height);
+                    context.stroke();
+                    
+                    // 向き
+                    context.strokeStyle = "#0000FF";
+                    context.beginPath();
+                    context.moveTo(x, y);
+                    switch(d)
+                    {
+                        case N:
+                            context.lineTo(x, height);
+                            break;
+                        case E:
+                            context.lineTo(width, y);
+                            break;
+                        case S:
+                            context.lineTo(x, 0);
+                            break;
+                        case W:
+                            context.lineTo(0, y);
+                            break;
+                        default:
+                    }
+                    context.stroke();
+                }
+            }
+            
+            function stepForward()
+            {
+                for (var i = 0; i < speed; ++i)
+                    ant.next();
+                    
+                step += speed;
+            }
+            
+            // Canvas 入力 //
+            function onCanvasMainClick(e)
+            {
+                var rect = e.target.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                
+                ant.addAnt(x, y, N);
+                animate();
+            }
+            
+            // UI //
+            function onInputNumberSpeed(value)
+            {
+                if (value < 0)
+                    value = 1;
+                
+                speed = parseInt(value);
+            }
+            
+            function onChangeTextRule(value)
+            {
+                if (value.length < 2)
+                    var rule = "LR";
+                else
+                    var rule = value
+                        .replace(/r/g, "R")
+                        .replace(/l/g, "L")
+                        .replace(/n/g, "N")
+                        .replace(/u/g, "U")
+                        .replace(/[^RLNU]/g, "");
+                    
+                ant.Rule = rule;
+                document.getElementById('textRule').value = rule;
+            }
+            
+            function onButtonStepClick()
+            {
+                var buttonPause = document.getElementById('buttonPause');
+                buttonPause.value = "Play";
+                pause = true;
+                
+                stepForward();
+                animate();
+            }
+            
+            function onButtonPauseClick()
+            {
+                var buttonPause = document.getElementById('buttonPause');
+                if(!pause)
+                {
+                    buttonPause.value = "Play";
+                    pause = true;
+                }
+                else
+                {
+                    buttonPause.value = "Pause";
+                    pause = false;
+                    
+                    requestAnimationFrame( animate );
+                }
+            }
+            
+            function onButtonResetClick()
+            {
+                step = 0;
+                ant.reset();
+                animate();
+            }
+            
+            function onButtonRandomClick()
+            {
+                var maxLen = 254;
+                var rule = "";
+                
+                if (document.getElementById("checkboxSymmetry").checked == true)
+                {
+                    var len = Math.floor(Math.random() * maxLen) * 2 + 4;
+                    for (var i = 0; i < len; ++i)
+                    {
+                        if (Math.random() < 0.5)
+                            rule += "LL";
+                        else
+                            rule += "RR";
+                    }
+                }
+                else
+                {
+                    var len = Math.floor(Math.random() * maxLen) + 2;
+                    var TURN = ["R", "N", "L", "U"];
+                    for (var i = 0; i < len; ++i)
+                        rule += (TURN[Math.floor(Math.random() * 4)]);
+                }
+                        
+                ant.Rule = rule;
+                document.getElementById('textRule').value = rule;
+                
+                onButtonResetClick();
+            }
+        </script>
+	</body>
+</html>
